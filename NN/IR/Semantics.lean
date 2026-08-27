@@ -405,61 +405,18 @@ def evalConcat {α : Type} [Context α] [DecidableEq Shape]
         throw <|
           s!"IR eval: node {i}: concat: internal error (invalid permutation for " ++
             s!"outShape) ({n.summary})"
-  let parentsPerm : List (DVal α) ←
-    parents.mapM (fun pv => do
-      match permuteDVal (α := α) pv permFront with
-      | .ok v => pure v
-      | .error msg => throw s!"IR eval: node {i}: concat: {msg} ({n.summary})")
+  let parentsPerm ← parents.mapM (fun pv => permuteDVal (α := α) pv permFront)
   match outPermShape with
   | Shape.dim nOut rest =>
-      let toSigma (pv : DVal α) : Except String (Sigma fun n => Tensor α (Shape.dim n rest))
-        := do
-        match pv with
-        | ⟨Shape.dim nP restP, t⟩ =>
-            if hRest : restP = rest then
-              let t' : Tensor α (Shape.dim nP rest) := by
-                simpa [hRest] using t
-              pure ⟨nP, t'⟩
-            else
-              throw <|
-                s!"IR eval: node {i}: concat: permuted tail mismatch: {repr restP} vs " ++
-                  s!"{repr rest}"
-        | ⟨_, _⟩ =>
-            throw s!"IR eval: node {i}: concat expects rank≥1 parents, got {repr pv.shape}"
-      let sigs ← parentsPerm.mapM toSigma
-      match sigs with
-      | [] =>
-          throw s!"IR eval: node {i}: concat internal error"
-      | s0 :: srest =>
-          let outSigma :=
-            srest.foldl
-              (fun acc nxt =>
-                match acc, nxt with
-                | ⟨n1, t1⟩, ⟨n2, t2⟩ =>
-                    ⟨n1 + n2, Tensor.concatLeadingAxisSpec (α := α) (n := n1) (m := n2) (s := rest)
-                      t1 t2⟩)
-              s0
-          match outSigma with
-          | ⟨nSum, tSum⟩ =>
-              if h : nSum = nOut then
-                let yPerm : Tensor α (Shape.dim nOut rest) := by
-                  simpa [h] using tSum
-                let outPerm : DVal α := DVal.mk (α := α) (Shape.dim nOut rest) yPerm
-                let out0 ←
-                  match permuteDVal (α := α) outPerm permBack with
-                  | .ok v => pure v
-                  | .error msg => throw s!"IR eval: node {i}: concat: {msg} ({n.summary})"
-                let y ← expectShape (α := α) (expected := n.outShape) out0
-                pure (DVal.mk (α := α) n.outShape y)
-              else
-                throw <|
-                  s!"IR eval: node {i}: concat out dim mismatch: declared {nOut}, " ++
-                    s!"computed {nSum}"
+      let midResult ← evalConcatLeadingAxisFold (α := α) i nOut rest parentsPerm
+      let out0 ← permuteDVal (α := α) midResult permBack
+      let y ← expectShape (α := α) (expected := n.outShape) out0
+      pure (DVal.mk (α := α) n.outShape y)
   | _ =>
       throw s!"IR eval: node {i}: concat expects rank≥1 outShape, got {repr n.outShape}"
 
 /-- Normalize a node result to the node's declared shape, rejecting inconsistent implementations. -/
-def normalizeNodeOutput {α : Type} [Context α] [DecidableEq Shape]
+@[reducible] def normalizeNodeOutput {α : Type} [Context α] [DecidableEq Shape]
     (i : Nat) (n : Node) (v : DVal α) : Except String (DVal α) :=
   if h : v.shape = n.outShape then
     pure (DVal.mk (α := α) n.outShape (h ▸ v.tensor))
@@ -482,6 +439,12 @@ theorem normalizeNodeOutput_nodeShape {α : Type} [Context α] [DecidableEq Shap
         ⟨s, t⟩ =
       .ok ⟨s, t⟩ := by
   simp [normalizeNodeOutput, DVal.shape, DVal.tensor, Pure.pure, Except.pure]
+
+theorem normalizeNodeOutput_eq_ok {α : Type} [Context α] [DecidableEq Shape]
+    (i : Nat) (n : Node) (s : Shape) (t : Tensor α s) (h : s = n.outShape) :
+    normalizeNodeOutput (α := α) i n ⟨s, t⟩ =
+      .ok ⟨n.outShape, h ▸ t⟩ := by
+  simp [normalizeNodeOutput, DVal.mk, DVal.shape, DVal.tensor, Pure.pure, Except.pure, h]
 
 /--
 Evaluate node `i` given already computed parent values `vals`.
@@ -1020,7 +983,6 @@ def evalAt
               mseLossDVal (α := α) i (getParent yId) (getParent tId)
           | _ => throw s!"IR eval: node {i}: mse_loss expects 2 parents ({n.summary})"
   if h : v.shape = n.outShape then
-    -- Normalize the returned value’s shape tag to the node’s declared `outShape`.
     pure (DVal.mk (α := α) n.outShape (h ▸ v.tensor))
   else
     throw <|

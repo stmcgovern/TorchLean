@@ -7,6 +7,7 @@ Authors: TorchLean Team
 module
 
 public import NN.Proofs.IR.ShapeContracts
+public import NN.Proofs.IR.EvalShapeTransfer
 
 /-!
 # IR Proofs
