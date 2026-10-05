@@ -95,29 +95,43 @@ namespace Graph
 
 /-! ## Permutation lowering -/
 
+/-- Move the axis at position `j` of `cur` down to position `i` by adjacent swaps,
+recording each swap depth (most recent first). -/
+def bubbleTo (i : Nat) : (j : Nat) → (cur swapsRev : List Nat) → List Nat × List Nat
+  | 0, cur, swapsRev => (cur, swapsRev)
+  | j + 1, cur, swapsRev =>
+      if j + 1 ≤ i then (cur, swapsRev)
+      else bubbleTo i j (Spec.Shape.swapAdjacentAxes cur j) (j :: swapsRev)
+
+/-- The outer loop of `swapDepthsForPerm`: place `perm[i]` at position `i`, for
+`fuel` successive `i`. -/
+def swapsLoop (perm : List Nat) : (fuel i : Nat) → (cur swapsRev : List Nat) →
+    Except String (List Nat)
+  | 0, _, _, swapsRev => pure swapsRev.reverse
+  | fuel + 1, i, cur, swapsRev =>
+      match perm[i]? with
+      | none => throw s!"permute: internal error: missing perm[{i}]"
+      | some target =>
+          match cur.findIdx? (· == target) with
+          | none => throw s!"permute: internal error: target axis {target} not in current axes {cur}"
+          | some j =>
+              let (cur', swapsRev') := bubbleTo i j cur swapsRev
+              swapsLoop perm fuel (i + 1) cur' swapsRev'
+
 /--
 Compute a sequence of adjacent swaps that realizes a target permutation.
 
 This is used to implement `.permute` by repeatedly applying `swapAdjacentAtDepth`, which is already
 available in the spec tensor library. If the permutation is ill-formed, this returns an error
 explaining what went wrong.
+
+Written by structural recursion (`swapsLoop`, `bubbleTo`) rather than `for`/`while`, so it is a
+total function the kernel can evaluate and proofs can unfold. The earlier loop form was `partial`
+underneath; the two agree on every list of length at most 6 with entries below 6, at every rank
+0-6 (checked exhaustively when the rewrite was made).
 -/
-def swapDepthsForPerm (perm : List Nat) (r : Nat) : Except String (List Nat) := do
-  let mut cur : List Nat := List.range r
-  let mut swapsRev : List Nat := []
-  for i in [0:r] do
-    match perm[i]? with
-    | none => throw s!"permute: internal error: missing perm[{i}]"
-    | some target =>
-        match cur.findIdx? (· == target) with
-        | none => throw s!"permute: internal error: target axis {target} not in current axes {cur}"
-        | some j =>
-            let mut k := j
-            while k > i do
-              swapsRev := (k - 1) :: swapsRev
-              cur := Spec.Shape.swapAdjacentAxes cur (k - 1)
-              k := k - 1
-  pure swapsRev.reverse
+def swapDepthsForPerm (perm : List Nat) (r : Nat) : Except String (List Nat) :=
+  swapsLoop perm r 0 (List.range r) []
 
 /--
 Permute a dynamic tensor value according to `perm`.
