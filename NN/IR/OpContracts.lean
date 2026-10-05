@@ -144,48 +144,44 @@ def checkLastAxis (tag : String) (axis : Nat) (s : Shape) : Except String Unit :
   else
     throw s!"{tag}: only last-axis is supported (axis={axis}, rank={Spec.Shape.rank s})"
 
+/-- Write `some val` at index `j` of `xs`, refusing a slot already written. -/
+def setSlot (perm : List Nat) (r : Nat) :
+    (xs : List (Option Nat)) → (axis j val : Nat) → Except String (List (Option Nat))
+  | [], _, j, _ => throw s!"permute: internal error: index {j} out of range for invLen={r}"
+  | none :: rest, _, 0, val => pure (some val :: rest)
+  | some _ :: _, axis, 0, _ => throw s!"permute: duplicate axis {axis} in {repr perm}"
+  | x :: rest, axis, k + 1, val => do pure (x :: (← setSlot perm r rest axis k val))
+
+/-- `inv[perm[i]] := i` for each `i`, left to right. -/
+def fillInv (perm : List Nat) (r : Nat) :
+    (ps : List Nat) → (i : Nat) → (inv : List (Option Nat)) → Except String (List (Option Nat))
+  | [], _, inv => pure inv
+  | p :: ps, i, inv =>
+      if p < r then do
+        let inv' ← setSlot perm r inv p p i
+        fillInv perm r ps (i + 1) inv'
+      else throw s!"permute: axis {p} out of range for rank {r} in {repr perm}"
+
+/-- Read every slot back, failing on an unwritten one. -/
+def readInv (perm : List Nat) : (inv : List (Option Nat)) → (j : Nat) → Except String (List Nat)
+  | [], _ => pure []
+  | some idx :: rest, j => do pure (idx :: (← readInv perm rest (j + 1)))
+  | none :: _, j => throw s!"permute: missing axis {j} in {repr perm}"
+
 /--
 Compute the inverse of a permutation list.
 
 If `perm` is a permutation of `[0,1,...,r-1]` (where `r = perm.length`), then the inverse `inv`
 satisfies `inv[perm[i]] = i`.
+
+Written by structural recursion (`fillInv`, `setSlot`, `readInv`) rather than imperative loops so
+that proofs can unfold it. It agrees with the earlier loop form on every list of length at most 6
+with entries below 7 (checked exhaustively when the rewrite was made), including every error case.
 -/
 def inversePerm (perm : List Nat) : Except String (List Nat) := do
   let r := perm.length
-  let mut inv : List (Option Nat) := List.replicate r none
-
-  let rec setOnce (xs : List (Option Nat)) (axis j : Nat) (val : Nat) : Except String (List (Option
-    Nat)) := do
-    match xs, j with
-    | [], _ =>
-        throw s!"permute: internal error: index {j} out of range for invLen={r}"
-    | none :: rest, 0 =>
-        pure (some val :: rest)
-    | some _ :: _, 0 =>
-        throw s!"permute: duplicate axis {axis} in {repr perm}"
-    | x :: rest, Nat.succ k =>
-        pure (x :: (← setOnce rest axis k val))
-
-  let rec getOpt : List (Option Nat) → Nat → Option (Option Nat)
-    | [], _ => none
-    | x :: _, 0 => some x
-    | _ :: xs, Nat.succ k => getOpt xs k
-
-  let mut i : Nat := 0
-  for p in perm do
-    if p < r then
-      inv ← setOnce inv p p i
-    else
-      throw s!"permute: axis {p} out of range for rank {r} in {repr perm}"
-    i := i + 1
-
-  let mut outRev : List Nat := []
-  for j in [0:r] do
-    match getOpt inv j with
-    | some (some idx) => outRev := idx :: outRev
-    | some none => throw s!"permute: missing axis {j} in {repr perm}"
-    | none => throw s!"permute: internal error: missing inv[{j}]"
-  pure outRev.reverse
+  let inv ← fillInv perm r perm 0 (List.replicate r none)
+  readInv perm inv 0
 
 /--
 Permutation (0-based axes) that moves `axis` to the **last** position, preserving the relative
