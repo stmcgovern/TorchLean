@@ -574,6 +574,14 @@ def buildFrom
                 Activation.reluSpec (α := α) (getIdx (α := α) (xs := ctx) ip)
               pure <| fwd forward
           | _ => throw s!"IRExec: node {i}: relu expects 1 parent ({n.summary})"
+      | .reluDeriv =>
+          match n.parents with
+          | [pId] =>
+              let ip ← parentIdx pId τ
+              let forward := fun ctx : TList α ([inShape] ++ ss) =>
+                Activation.reluDerivSpec (α := α) (getIdx (α := α) (xs := ctx) ip)
+              pure <| fwd forward
+          | _ => throw s!"IRExec: node {i}: relu_deriv expects 1 parent ({n.summary})"
       | .tanh =>
           match n.parents with
           | [pId] =>

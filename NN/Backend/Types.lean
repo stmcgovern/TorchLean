@@ -110,6 +110,7 @@ inductive BackendOp where
   | max
   | min
   | relu
+  | reluDeriv
   | gelu
   | sigmoid
   | tanh
@@ -162,6 +163,7 @@ def name : BackendOp → String
   | .max => "max"
   | .min => "min"
   | .relu => "relu"
+  | .reluDeriv => "relu_deriv"
   | .gelu => "gelu"
   | .sigmoid => "sigmoid"
   | .tanh => "tanh"

@@ -129,6 +129,10 @@ inductive OpKind where
       -- in an external store keyed by node id.
   | relu | tanh | sigmoid | exp | log | sin | cos
       -- Common elementwise activations / nonlinearities.
+  | reluDeriv
+      -- Elementwise ReLU derivative `1[x > 0]` (`Activation.Math.reluDerivSpec`). ReLU's
+      -- backward is `g * reluDeriv x` -- PyTorch's `threshold_backward(g, relu(x), 0)` -- and
+      -- since `relu x > 0 ↔ x > 0`, applying it to relu's output gives the same mask.
   | softmax (axis : Nat)
       -- Softmax along an axis.
   | layernorm (axis : Nat)
@@ -188,6 +192,7 @@ def minParents : OpKind → Nat
   | .conv2d .. => 1
   | .batchNorm2dNchwEval .. => 1
   | .relu => 1
+  | .reluDeriv => 1
   | .tanh => 1
   | .sigmoid => 1
   | .exp => 1
@@ -242,6 +247,7 @@ def tag : OpKind → String
   | .conv2d .. => "conv2d"
   | .batchNorm2dNchwEval .. => "batch_norm2d_nchw_eval"
   | .relu => "relu"
+  | .reluDeriv => "relu_deriv"
   | .tanh => "tanh"
   | .sigmoid => "sigmoid"
   | .exp => "exp"
@@ -296,6 +302,7 @@ def describe : OpKind → String
   | .batchNorm2dNchwEval channels =>
       s!"batch_norm2d_nchw_eval(channels={channels}, payload=node_id)"
   | .relu => "relu"
+  | .reluDeriv => "relu_deriv"
   | .tanh => "tanh"
   | .sigmoid => "sigmoid"
   | .exp => "exp"

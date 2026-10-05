@@ -1811,7 +1811,7 @@ theorem alphaCrown_transfer_sound
                               exact False.elim this
 
     | .permute _ | .randUniform _ | .bernoulliMask _ | .add | .sub | .mul_elem | .abs | .sqrt |
-      .inv
+      .inv | .reluDeriv
     | .maxElem | .minElem | .maxPool2d .. | .maxPool2dPad .. | .avgPool2d .. | .avgPool2dPad
       ..
     | .broadcastTo .. | .reduceSum _ | .reduceMean _ | .conv2d .. | .batchNorm2dNchwEval _

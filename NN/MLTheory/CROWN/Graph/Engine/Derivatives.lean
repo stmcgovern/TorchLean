@@ -54,8 +54,9 @@ def runDeriv1D (g : Graph) (ps : ParamStore α) (ibp : Array (Option (FlatBox α
       let d := node.outShape.size
       let z := Spec.fill (α:=α) Numbers.zero (.dim d .scalar)
       drs.set! id (some { dim := d, lo := z, hi := z })
-    | .maxPool2d .. | .avgPool2d .. | .maxPool2dPad .. | .avgPool2dPad .. =>
-      -- Not supported by the derivative-bound passes (used by PINN tooling).
+    | .maxPool2d .. | .avgPool2d .. | .maxPool2dPad .. | .avgPool2dPad .. | .reluDeriv =>
+      -- Not supported by the derivative-bound passes (used by PINN tooling). `reluDeriv`
+      -- too: its derivative is 0 almost everywhere and unbounded at 0, so no box is sound.
       drs
     | .sum =>
       match node.parents with
@@ -510,7 +511,7 @@ def runDerivDirectional (g : Graph) (ps : ParamStore α)
           | none => drs
         | _, _ => drs
       | _ => drs
-    | .maxPool2d .. | .avgPool2d .. | .maxPool2dPad .. | .avgPool2dPad .. =>
+    | .maxPool2d .. | .avgPool2d .. | .maxPool2dPad .. | .avgPool2dPad .. | .reluDeriv =>
       -- Not supported by the derivative-bound passes.
       drs
     | .sum =>
@@ -849,7 +850,7 @@ def runDeriv2D (g : Graph) (ps : ParamStore α)
       let d := node.outShape.size
       let z := Spec.fill (α:=α) Numbers.zero (.dim d .scalar)
       d2s.set! id (some { dim := d, lo := z, hi := z })
-    | .maxPool2d .. | .avgPool2d .. | .maxPool2dPad .. | .avgPool2dPad .. =>
+    | .maxPool2d .. | .avgPool2d .. | .maxPool2dPad .. | .avgPool2dPad .. | .reluDeriv =>
       -- Not supported by the second-derivative bound pass.
       d2s
     | .linear =>

@@ -528,6 +528,9 @@ private def emitForwardBody (g : NN.IR.Graph) (ps : ParamStore Float) (bindings 
     | .relu =>
         let p ← expectUnary id n.parents
         lines := lines ++ [indentFour s!"v{id} = torch.relu(v{p})"]
+    | .reluDeriv =>
+        let p ← expectUnary id n.parents
+        lines := lines ++ [indentFour s!"v{id} = (v{p} > 0).to(v{p}.dtype)"]
     | .tanh =>
         let p ← expectUnary id n.parents
         lines := lines ++ [indentFour s!"v{id} = torch.tanh(v{p})"]

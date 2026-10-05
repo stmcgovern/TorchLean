@@ -816,6 +816,12 @@ def evalAt
             let p ← expectShape (α := α) (expected := n.outShape) (getParent pId)
             pure (DVal.mk (α := α) n.outShape (Activation.reluSpec (α := α) p))
         | _ => throw s!"IR eval: node {i}: relu expects 1 parent ({n.summary})"
+    | .reluDeriv =>
+        match n.parents with
+        | [pId] =>
+            let p ← expectShape (α := α) (expected := n.outShape) (getParent pId)
+            pure (DVal.mk (α := α) n.outShape (Activation.reluDerivSpec (α := α) p))
+        | _ => throw s!"IR eval: node {i}: relu_deriv expects 1 parent ({n.summary})"
     | .tanh =>
         match n.parents with
         | [pId] =>

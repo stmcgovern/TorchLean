@@ -64,6 +64,7 @@ def evalAtCoverageWitnesses : List OpKind :=
     .conv2d 1 1 1 1 1 0,
     .batchNorm2dNchwEval 1,
     .relu,
+    .reluDeriv,  -- `evalAt_reluDeriv_eq`
     .tanh,
     .sigmoid,
     .exp,

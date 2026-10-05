@@ -60,7 +60,7 @@ def propagateCROWNNode
       | none => bounds
     | _ => bounds
   | .randUniform _ | .bernoulliMask _ | .abs | .sqrt | .permute _ | .maxElem | .minElem | .sin |
-    .cos
+    .cos | .reluDeriv
   | .maxPool2d .. | .avgPool2d .. | .maxPool2dPad .. | .avgPool2dPad ..
   | .broadcastTo .. | .reduceSum .. | .reduceMean .. =>
     -- Conservative fallback: use IBP box as a constant affine bound (A = 0).

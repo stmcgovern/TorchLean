@@ -176,8 +176,9 @@ def propagateAffineNode
       | some a => affs.set! id (some a)
       | none => affs
     | _ => affs
-  | .randUniform _ | .bernoulliMask _ =>
+  | .randUniform _ | .bernoulliMask _ | .reluDeriv =>
     -- Stochastic nodes are treated as non-affine; downstream passes can fall back to IBP boxes.
+    -- So is the ReLU derivative, a step, whose IBP box `[0,1]` holds for any input.
     affs
   | .maxPool2d .. | .avgPool2d .. | .maxPool2dPad .. | .avgPool2dPad .. =>
     -- Pooling is non-affine; downstream passes can fall back to IBP boxes.

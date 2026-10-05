@@ -270,6 +270,10 @@ private theorem buildFrom_preserves_denotation
               exact buildFrom_denoteAllFrom_relu (α := α) (g := g) (payload := payload)
                 (gd := gd) (i := i) (st' := st') (x := x) (n := n)
                 hN hk hi hBuild0 tail
+          | reluDeriv =>
+              exact buildFrom_denoteAllFrom_reluDeriv (α := α) (g := g) (payload := payload)
+                (gd := gd) (i := i) (st' := st') (x := x) (n := n)
+                hN hk hi hBuild0 tail
           | tanh =>
               exact buildFrom_denoteAllFrom_tanh (α := α) (g := g) (payload := payload)
                 (gd := gd) (i := i) (st' := st') (x := x) (n := n)

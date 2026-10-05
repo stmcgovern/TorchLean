@@ -502,7 +502,7 @@ private def backwardNode (dir : BackwardDir)
         let st1 := addCoeff (α:=α) st p1 (backwardSubLeft (α:=α) aY)
         addCoeff (α:=α) st1 p2 (backwardSubRight (α:=α) aY)
       | _ => st.fail
-    | .randUniform _ | .bernoulliMask _ | .abs | .sqrt | .sin | .cos | .permute _ | .maxElem |
+    | .randUniform _ | .bernoulliMask _ | .reluDeriv | .abs | .sqrt | .sin | .cos | .permute _ | .maxElem |
       .minElem
     | .maxPool2d .. | .avgPool2d .. | .maxPool2dPad .. | .avgPool2dPad ..
     | .broadcastTo .. | .reduceSum .. | .reduceMean .. =>

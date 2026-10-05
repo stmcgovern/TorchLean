@@ -53,9 +53,10 @@ def propagateIBPNode (nodes : Array Node) (ps : ParamStore α) (boxes : Array (O
     match node.parents with
     | p1 :: _ => boxes.set! id (some (get! p1))
     | _ => boxes
-  | .randUniform _ | .bernoulliMask _ =>
+  | .randUniform _ | .bernoulliMask _ | .reluDeriv =>
     -- Stochastic nodes are treated as *nondeterministic-but-bounded* for verification.
-    -- Sound enclosure: U[0,1) ⊆ [0,1], Bernoulli mask ⊆ [0,1].
+    -- Sound enclosure: U[0,1) ⊆ [0,1], Bernoulli mask ⊆ [0,1]. The ReLU derivative
+    -- `1[x > 0]` is in `{0, 1} ⊆ [0,1]` whatever its input, so the same enclosure holds.
     let d := node.outShape.size
     let lo := Spec.fill (α := α) Numbers.zero (.dim d .scalar)
     let hi := Spec.fill (α := α) Numbers.one (.dim d .scalar)

@@ -118,6 +118,85 @@ theorem buildFrom_denoteAllFrom_relu
                 (gd := gd) (i := i) (st' := st') (x := x) (hi := hi)
                 (τ := n.outShape) (nodeData := nodeData) hTail hEval
 
+/-- `reluDeriv`: the same lockstep as `relu`, with `reluDerivSpec` in place of `reluSpec`. -/
+theorem buildFrom_denoteAllFrom_reluDeriv
+    {α : Type} [Context α] [DecidableEq Shape]
+    (g : NN.IR.Graph) (payload : Payload α) {inShape : Shape} {ss : List Shape}
+    (gd : GraphData α Unit [inShape] ss) (i : Nat) (st' : State α inShape)
+    (x : Tensor α inShape) (n : NN.IR.Node)
+    (hN : g.getNode i = .ok n) (hk : n.kind = .reluDeriv) (hi : i < g.nodes.size)
+    (hBuild :
+      buildFrom (α := α) (g := g) (payload := payload) (inShape := inShape)
+        (i := i) (st := (⟨ss, gd⟩ : State α inShape)) = .ok st')
+    (ih :
+      ∀ (st1 : State α inShape),
+        buildFrom (α := α) (g := g) (payload := payload) (inShape := inShape)
+          (i := i + 1) st1 = .ok st' →
+        NN.IR.Graph.denoteAllFrom (α := α) (g := g) (payload := payload)
+          (input := NN.IR.DVal.mk (α := α) inShape x)
+          (i := i + 1) (vals := denoteAllState (α := α) inShape st1 x) =
+          .ok (denoteAllState (α := α) inShape st' x)) :
+    NN.IR.Graph.denoteAllFrom (α := α) (g := g) (payload := payload)
+      (input := NN.IR.DVal.mk (α := α) inShape x)
+      (i := i) (vals := denoteAllState (α := α) inShape (st := (⟨ss, gd⟩ : State α inShape)) x) =
+      .ok (denoteAllState (α := α) inShape st' x) := by
+  let vals0 : Array (NN.IR.DVal α) :=
+    denoteAllState (α := α) inShape (st := (⟨ss, gd⟩ : State α inShape)) x
+  let ctx : TList α ([inShape] ++ ss) :=
+    GraphData.eval (α := α) (Δ := Unit) (Γ := [inShape]) (ss := ss) gd (.cons x .nil) ()
+  let input : NN.IR.DVal α := NN.IR.DVal.mk (α := α) inShape x
+
+  unfold buildFrom at hBuild
+  simp (config := { failIfUnchanged := false }) [hi, hN, hk] at hBuild
+  cases hp : n.parents with
+  | nil =>
+      simp [hp] at hBuild
+      try cases hBuild
+  | cons pId ps =>
+      cases ps with
+      | cons _ _ =>
+          simp [hp] at hBuild
+          try cases hBuild
+      | nil =>
+          cases hIdx : mkIdx (inShape := inShape) (ss := ss) pId n.outShape with
+          | error msg =>
+              simp [hp, hIdx] at hBuild
+              try cases hBuild
+          | ok ip =>
+              simp [hp, hIdx] at hBuild
+              let nodeData : NodeData α Unit ([inShape] ++ ss) n.outShape :=
+                mkFwdNode (α := α) (Γ := [inShape] ++ ss) (τ := n.outShape) (fun ctx =>
+                  Activation.reluDerivSpec (α := α) (getIdx (α := α) (xs := ctx) ip))
+              let st1 : State α inShape := ⟨ss ++ [n.outShape], .snoc (ss := ss) gd nodeData⟩
+              have hRec :
+                  buildFrom (α := α) (g := g) (payload := payload) (inShape := inShape)
+                      (i := i + 1) st1 =
+                    .ok st' := by
+                simpa [st1, nodeData] using hBuild
+              have hTail := ih st1 hRec
+              have hGet :
+                  vals0[pId]! =
+                    NN.IR.DVal.mk (α := α) n.outShape (getIdx (α := α) (xs := ctx) ip) := by
+                simpa [vals0, ctx] using
+                  (denoteAllState_get_mkIdx (inShape := inShape) (ss := ss)
+                    (gd := gd) (x := x) (pid := pId) (s := n.outShape) (idx := ip) hIdx)
+              have hEval :
+                  NN.IR.Graph.evalAt (α := α) (g := g) (payload := payload)
+                      (input := input) (vals := vals0) (i := i) =
+                    .ok (NN.IR.DVal.mk (α := α) n.outShape (nodeData.forward ctx ())) := by
+                have hExp :
+                    NN.IR.Graph.expectShape (α := α) (expected := n.outShape) vals0[pId]! =
+                      .ok (getIdx (α := α) (xs := ctx) ip) := by
+                  simpa [hGet, NN.IR.DVal.mk] using
+                    (Graph.expectShape_sigma (α := α) (s := n.outShape)
+                      (t := getIdx (α := α) (xs := ctx) ip))
+                simp [NN.IR.Graph.evalAt, hN, hk, hp, hExp,
+                  nodeData, mkFwdNode, NN.IR.DVal.shape, NN.IR.DVal.tensor, NN.IR.DVal.mk,
+                  throw_eq_error, Except.instMonad, Except.bind, Except.pure]
+              exact buildFrom_denoteAllFrom_nodeData_exact (α := α) (g := g) (payload := payload)
+                (gd := gd) (i := i) (st' := st') (x := x) (hi := hi)
+                (τ := n.outShape) (nodeData := nodeData) hTail hEval
+
 /-- Semantic-preservation lemma for `.tanh` lowering. -/
 theorem buildFrom_denoteAllFrom_tanh
     {α : Type} [Context α] [DecidableEq Shape]

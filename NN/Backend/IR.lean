@@ -46,6 +46,7 @@ def op? : NN.IR.OpKind → Option BackendOp
   | .maxElem => some .max
   | .minElem => some .min
   | .relu => some .relu
+  | .reluDeriv => some .reluDeriv
   | .tanh => some .tanh
   | .sigmoid => some .sigmoid
   | .exp => some .exp

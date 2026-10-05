@@ -303,6 +303,19 @@ theorem evalAt_relu_eq
       Except.ok (DVal.mk (α := α) s (Activation.reluSpec (α := α) x)) := by
   exact evalAt_unaryElementwise_eq .relu x
 
+/-- Local IR semantics for the ReLU derivative `1[x > 0]`. Not a `UnaryElementwiseOp`: the
+verified compiler does not emit it, so it needs only the evaluator bridge, proved directly. -/
+theorem evalAt_reluDeriv_eq
+    {α : Type} [Context α] [DecidableEq Shape]
+    {s : Shape} (x : Tensor α s) :
+    Graph.evalAt (α := α) (g := unaryGraph .reluDeriv s) (payload := {})
+        (input := DVal.mk (α := α) s x)
+        (vals := #[DVal.mk (α := α) s x]) (i := 1)
+      =
+      Except.ok (DVal.mk (α := α) s (Activation.reluDerivSpec (α := α) x)) := by
+  simp [Graph.evalAt, unaryGraph, unaryNode, Graph.getNode, Graph.getNode?, Graph.expectShape,
+    Bind.bind, Except.bind, Pure.pure, Except.pure]
+
 /-- Local IR semantics for tanh. -/
 theorem evalAt_tanh_eq
     {α : Type} [Context α] [DecidableEq Shape]

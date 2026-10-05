@@ -174,7 +174,7 @@ def inferNodeOutShape (n : Node) (parentShapes : List Shape) : Except String Sha
       match parentShapes with
       | [s] => OpContracts.inferBatchNorm2dNchwEvalOutShape channels s
       | _ => throw "batch_norm2d_nchw_eval: expected 1 parent"
-  | .relu | .tanh | .sigmoid | .exp | .log | .inv | .sin | .cos =>
+  | .relu | .reluDeriv | .tanh | .sigmoid | .exp | .log | .inv | .sin | .cos =>
       match parentShapes with
       | [s] => pure s
       | _ => throw s!"{n.kind.tag}: expected 1 parent"
