@@ -90,20 +90,52 @@ Reconstruct the proof object required by the typed tensor broadcast primitive.
 
 IR nodes store dynamic shapes, so every pass that accepts `.broadcastTo` must rebuild this witness
 instead of trusting that the declared input and output shapes are compatible.
+
+Shapes are aligned from the right, as in PyTorch/NumPy broadcasting: missing leading axes are
+prepended, then each remaining axis must either match or have input size `1`. A rank-`k` input
+therefore always lands on the last `k` axes of the output, whatever the sizes involved.
 -/
 def mkCanBroadcastTo? : (s₁ s₂ : Shape) → Option (Shape.CanBroadcastTo s₁ s₂)
-  | .scalar, s₂ => some (.scalar_to_any s₂)
-  | .dim n₁ t₁, .dim n₂ t₂ =>
-      if hEq : n₁ = n₂ then
-        (mkCanBroadcastTo? t₁ t₂).map (fun tail =>
-          hEq ▸ Shape.CanBroadcastTo.dim_eq (n := n₁) (s₁ := t₁) (s₂ := t₂) tail)
-      else if h1 : n₁ = 1 then
-        (mkCanBroadcastTo? t₁ t₂).map (fun tail =>
-          h1 ▸ Shape.CanBroadcastTo.dim_1_to_n (n := n₂) (s₁ := t₁) (s₂ := t₂) tail)
-      else
-        (mkCanBroadcastTo? (.dim n₁ t₁) t₂).map (fun tail =>
-          Shape.CanBroadcastTo.expand_dims (n := n₂) (s₁ := .dim n₁ t₁) (s₂ := t₂) tail)
-  | _, _ => none
+  | s₁, s₂ =>
+    if Spec.Shape.rank s₁ < Spec.Shape.rank s₂ then
+      match s₂ with
+      | .scalar => none
+      | .dim n₂ t₂ =>
+        (mkCanBroadcastTo? s₁ t₂).map (fun tail =>
+          Shape.CanBroadcastTo.expand_dims (n := n₂) (s₁ := s₁) (s₂ := t₂) tail)
+    else if Spec.Shape.rank s₂ < Spec.Shape.rank s₁ then
+      none
+    else
+      match s₁, s₂ with
+      | .scalar, s₂ => some (.scalar_to_any s₂)
+      | .dim n₁ t₁, .dim n₂ t₂ =>
+          if hEq : n₁ = n₂ then
+            (mkCanBroadcastTo? t₁ t₂).map (fun tail =>
+              hEq ▸ Shape.CanBroadcastTo.dim_eq (n := n₁) (s₁ := t₁) (s₂ := t₂) tail)
+          else if h1 : n₁ = 1 then
+            (mkCanBroadcastTo? t₁ t₂).map (fun tail =>
+              h1 ▸ Shape.CanBroadcastTo.dim_1_to_n (n := n₂) (s₁ := t₁) (s₂ := t₂) tail)
+          else
+            none
+      | _, _ => none
+
+/-! Regression checks: alignment is from the right, as in PyTorch. -/
+
+-- `[4] → [2, 4]`: the input is the trailing axis (left-greedy matching would also accept
+-- `[4] → [4, 2]` by aligning the leading axis, which PyTorch rejects).
+example : (mkCanBroadcastTo? (.dim 4 .scalar) (.dim 2 (.dim 4 .scalar))).isSome = true := by
+  decide
+example : (mkCanBroadcastTo? (.dim 4 .scalar) (.dim 4 (.dim 2 .scalar))).isSome = false := by
+  decide
+-- `[2] → [2, 2]` must copy along the leading axis: the witness prepends, it does not match.
+example : (match mkCanBroadcastTo? (.dim 2 .scalar) (.dim 2 (.dim 2 .scalar)) with
+    | some (.expand_dims _) => true
+    | _ => false) = true := by decide
+-- size-1 axes stretch, others must match
+example : (mkCanBroadcastTo? (.dim 1 (.dim 3 .scalar)) (.dim 5 (.dim 3 .scalar))).isSome = true := by
+  decide
+example : (mkCanBroadcastTo? (.dim 2 (.dim 3 .scalar)) (.dim 5 (.dim 3 .scalar))).isSome = false := by
+  decide
 
 /--
 Compute the `(seqLen, embedDim)` pair used to interpret `layernorm axis`.
