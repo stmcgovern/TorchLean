@@ -46,25 +46,54 @@ theorem unitRoundoff32_nonneg : 0 ≤ unitRoundoff32 :=
 at most `u`. -/
 def ZeroOrNormal (x : ℝ) : Prop := x = 0 ∨ FP32.minNormal ≤ _root_.abs x
 
-/-- **Rounding a zero-or-normal sum** is within `u · (|a| + |b|)` of the exact sum. -/
-theorem fp32Round_add_error_of_normal (a b : ℝ) (h : ZeroOrNormal (a + b)) :
-    _root_.abs (fp32Round (a + b) - (a + b)) ≤
-      unitRoundoff32 * (_root_.abs a + _root_.abs b) := by
+/-- **Rounding a zero-or-normal value** has relative error at most `u`. -/
+theorem fp32Round_error_of_normal (x : ℝ) (h : ZeroOrNormal x) :
+    _root_.abs (fp32Round x - x) ≤ unitRoundoff32 * _root_.abs x := by
   rcases h with heq | hnormal
-  · rw [heq, fp32Round_zero, sub_self, abs_zero]
-    exact mul_nonneg unitRoundoff32_nonneg (by positivity)
+  · rw [heq, fp32Round_zero]; simp
   · have hmin : 0 < FP32.minNormal := by
       rw [FP32.minNormal_eq_bpow]; exact neuralBpow.pos binaryRadix (-126)
-    have hne : a + b ≠ 0 := by
+    have hne : x ≠ 0 := by
       intro h0
       rw [h0, abs_zero] at hnormal
       linarith
-    have hrel := fp32Round_relative_error_of_normal (a + b) hne hnormal
-    rw [ErrorBounds.relativeError, div_le_iff₀ (abs_pos.mpr hne)] at hrel
-    calc _root_.abs (fp32Round (a + b) - (a + b))
-        ≤ unitRoundoff32 * _root_.abs (a + b) := hrel
-      _ ≤ unitRoundoff32 * (_root_.abs a + _root_.abs b) :=
-          mul_le_mul_of_nonneg_left (abs_add_le a b) unitRoundoff32_nonneg
+    have hrel := fp32Round_relative_error_of_normal x hne hnormal
+    rwa [ErrorBounds.relativeError, div_le_iff₀ (abs_pos.mpr hne)] at hrel
+
+/-- **Rounding a zero-or-normal sum** is within `u · (|a| + |b|)` of the exact sum. -/
+theorem fp32Round_add_error_of_normal (a b : ℝ) (h : ZeroOrNormal (a + b)) :
+    _root_.abs (fp32Round (a + b) - (a + b)) ≤
+      unitRoundoff32 * (_root_.abs a + _root_.abs b) :=
+  (fp32Round_error_of_normal (a + b) h).trans
+    (mul_le_mul_of_nonneg_left (abs_add_le a b) unitRoundoff32_nonneg)
+
+/-! ## The executable operations, on the finite branch and in the normal range -/
+
+/-- Addition: within `u · (|x| + |y|)` of the exact sum. -/
+theorem toReal_add_error_of_normal (x y : IEEE32Exec) (hfin : isFinite (add x y) = true)
+    (h : ZeroOrNormal (toReal x + toReal y)) :
+    _root_.abs (toReal (add x y) - (toReal x + toReal y)) ≤
+      unitRoundoff32 * (_root_.abs (toReal x) + _root_.abs (toReal y)) := by
+  rw [toReal_add_eq_fp32Round_of_isFinite x y hfin]
+  exact fp32Round_add_error_of_normal _ _ h
+
+/-- Subtraction: within `u · (|x| + |y|)` of the exact difference. -/
+theorem toReal_sub_error_of_normal (x y : IEEE32Exec) (hx : isFinite x = true)
+    (hy : isFinite y = true) (hfin : isFinite (sub x y) = true)
+    (h : ZeroOrNormal (toReal x - toReal y)) :
+    _root_.abs (toReal (sub x y) - (toReal x - toReal y)) ≤
+      unitRoundoff32 * (_root_.abs (toReal x) + _root_.abs (toReal y)) := by
+  rw [toReal_sub_eq_fp32Round_of_isFinite x y hx hy hfin]
+  have := fp32Round_add_error_of_normal (toReal x) (-toReal y) (by rwa [← sub_eq_add_neg])
+  rwa [← sub_eq_add_neg, abs_neg] at this
+
+/-- Multiplication: relative error at most `u`. -/
+theorem toReal_mul_error_of_normal (x y : IEEE32Exec) (hfin : isFinite (mul x y) = true)
+    (h : ZeroOrNormal (toReal x * toReal y)) :
+    _root_.abs (toReal (mul x y) - toReal x * toReal y) ≤
+      unitRoundoff32 * _root_.abs (toReal x * toReal y) := by
+  rw [toReal_mul_eq_fp32Round_of_isFinite x y hfin]
+  exact fp32Round_error_of_normal _ h
 
 /-! ## Sums -/
 
@@ -134,6 +163,29 @@ theorem localAddBoundOn_of_normalRangeDot :
         unitRoundoff32 * (_root_.abs (evalRealDotIEEE a) + _root_.abs (evalRealDotIEEE b))
       rw [ha, hb]
       exact fp32Round_add_error_of_normal _ _ hab
+
+/-- Every leaf product of a finite dot tree is finite. -/
+theorem isFinite_mul_of_mem_leaves_of_FiniteEvalDot :
+    ∀ (t : SumTree (IEEE32Exec × IEEE32Exec)), FiniteEvalDot t →
+      ∀ q ∈ t.leaves, isFinite (mul q.1 q.2) = true
+  | .leaf (x, y), h, q, hq => by
+    simp [SumTree.leaves] at hq; subst hq; exact h
+  | .node a b, h, q, hq => by
+    simp only [SumTree.leaves, List.mem_append] at hq
+    rcases hq with hq | hq
+    · exact isFinite_mul_of_mem_leaves_of_FiniteEvalDot a h.1 q hq
+    · exact isFinite_mul_of_mem_leaves_of_FiniteEvalDot b h.2.1 q hq
+
+/-- Every leaf of a finite sum tree is finite. -/
+theorem isFinite_of_mem_leaves_of_FiniteEvalSumTree :
+    ∀ (t : SumTree IEEE32Exec), FiniteEvalSumTree t → ∀ x ∈ t.leaves, isFinite x = true
+  | .leaf y, h, x, hx => by
+    simp [SumTree.leaves] at hx; subst hx; exact h
+  | .node a b, h, x, hx => by
+    simp only [SumTree.leaves, List.mem_append] at hx
+    rcases hx with hx | hx
+    · exact isFinite_of_mem_leaves_of_FiniteEvalSumTree a h.1 x hx
+    · exact isFinite_of_mem_leaves_of_FiniteEvalSumTree b h.2.1 x hx
 
 /-- **The enclosure of a sum of products, from hypotheses about the tree**: the accumulation
 error relative to the sum of the rounded products, as in `dotTreeResult_enclosure`. -/
