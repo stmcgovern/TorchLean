@@ -14,6 +14,7 @@ public import NN.Floats.IEEEExec.Exec32
 public import NN.Floats.IEEEExec.Notation
 public import NN.Floats.IEEEExec.Semantics.OpSandwich
 public import NN.Floats.IEEEExec.Reductions
+public import NN.Floats.IEEEExec.Reductions.NormalRange
 public import NN.Floats.IEEEExec.Rounding.RoundQuotEvenBounds
 public import NN.Floats.IEEEExec.Rules.SpecialRules
 public import NN.Floats.IEEEExec.Rules.TranscendentalRules

@@ -208,22 +208,50 @@ def RelativeLocalAddBound (roundAdd : ℝ → ℝ → ℝ) (u : ℝ) : Prop :=
   ∀ a b : ℝ, _root_.abs (roundAdd a b - (a + b)) ≤ u * (_root_.abs a + _root_.abs b)
 
 /--
+The local bound, required only at the additions a tree performs: at every internal node, the
+rounded sum of the two subtrees' rounded values is within `u * (|a| + |b|)` of their exact sum.
+`RelativeLocalAddBound` implies it for every tree (`localAddBoundOn_of_relativeLocalAddBound`);
+binary32 satisfies it for a tree whose intermediate sums are zero or in the normal range
+(`NormalRangeSumTree`, `NN.Floats.IEEEExec.Reductions.NormalRange`), which is a hypothesis about
+the tree's values and so one a user can discharge.
+-/
+def LocalAddBoundOn (roundAdd : ℝ → ℝ → ℝ) (leafVal : α → ℝ) (u : ℝ) : SumTree α → Prop
+  | .leaf _ => True
+  | .node a b =>
+      LocalAddBoundOn roundAdd leafVal u a ∧ LocalAddBoundOn roundAdd leafVal u b ∧
+      _root_.abs (roundAdd (evalRound roundAdd leafVal a) (evalRound roundAdd leafVal b) -
+          (evalRound roundAdd leafVal a + evalRound roundAdd leafVal b)) ≤
+        u * (_root_.abs (evalRound roundAdd leafVal a) + _root_.abs (evalRound roundAdd leafVal b))
+
+theorem localAddBoundOn_of_relativeLocalAddBound
+    (roundAdd : ℝ → ℝ → ℝ) (leafVal : α → ℝ) (u : ℝ) (H : RelativeLocalAddBound roundAdd u) :
+    ∀ t : SumTree α, LocalAddBoundOn roundAdd leafVal u t
+  | .leaf _ => trivial
+  | .node a b =>
+      ⟨localAddBoundOn_of_relativeLocalAddBound roundAdd leafVal u H a,
+       localAddBoundOn_of_relativeLocalAddBound roundAdd leafVal u H b, H _ _⟩
+
+/--
 Order-independent enclosure for any reduction tree evaluated with `roundAdd`.
 
 Let `A = Σ |leaf_i|` be the sum of absolute values of leaves.
 For `n` leaves, the rounded evaluation is within `(growth u n - 1) * A` of the exact real sum.
+The local bound is needed only at the tree's own additions (`LocalAddBoundOn`); the version with
+the global `RelativeLocalAddBound` is `evalRound_enclosure_of_relativeLocalAddBound`.
 -/
-theorem evalRound_enclosure_of_relativeLocalAddBound
-    (roundAdd : ℝ → ℝ → ℝ) (leafVal : α → ℝ) (u : ℝ)
-    (H : RelativeLocalAddBound roundAdd u) (hu : 0 ≤ u) :
-    ∀ t : SumTree α,
+theorem evalRound_enclosure_of_localAddBoundOn
+    (roundAdd : ℝ → ℝ → ℝ) (leafVal : α → ℝ) (u : ℝ) (hu : 0 ≤ u) :
+    ∀ t : SumTree α, LocalAddBoundOn roundAdd leafVal u t →
       _root_.abs (evalRound roundAdd leafVal t - exactSum leafVal t) ≤
         (growth u t.leafCount - 1) * sumAbs leafVal t := by
   intro t
   induction t with
   | leaf x =>
+      intro _
       simp [evalRound, exactSum, sumAbs, SumTree.leafCount, growth]
   | node a b ihA ihB =>
+      intro H
+      obtain ⟨Ha, Hb, Hab⟩ := H
       -- Proof strategy:
       --
       -- 1) Use the local bound `H` to control the fresh rounding error at the root node.
@@ -262,9 +290,9 @@ theorem evalRound_enclosure_of_relativeLocalAddBound
         exact hmono this
 
       have hEa : _root_.abs (ra - Sa) ≤ (growth u a.leafCount - 1) * Aa := by
-        simpa [ra, Sa, Aa] using ihA
+        simpa [ra, Sa, Aa] using ihA Ha
       have hEb : _root_.abs (rb - Sb) ≤ (growth u b.leafCount - 1) * Ab := by
-        simpa [rb, Sb, Ab] using ihB
+        simpa [rb, Sb, Ab] using ihB Hb
 
       have hra : _root_.abs ra ≤ growth u (n - 1) * Aa := by
         -- `|ra| ≤ |Sa| + |ra-Sa| ≤ Aa + (growth-1)Aa = growth*Aa`, then monotone growth.
@@ -297,7 +325,7 @@ theorem evalRound_enclosure_of_relativeLocalAddBound
           _ ≤ (growth u (n - 1)) * Ab := hgB
 
       have hround : _root_.abs (roundAdd ra rb - (ra + rb)) ≤ u * (_root_.abs ra + _root_.abs rb) :=
-        H ra rb
+        Hab
 
       have hdecomp :
           roundAdd ra rb - (Sa + Sb) = (roundAdd ra rb - (ra + rb)) + ((ra - Sa) + (rb - Sb)) := by
@@ -380,6 +408,16 @@ theorem evalRound_enclosure_of_relativeLocalAddBound
         _ = (growth u (SumTree.leafCount (SumTree.node a b)) - 1) * sumAbs leafVal (SumTree.node a
           b) := by
               simp [SumTree.leafCount, sumAbs, n, Aa, Ab]
+
+/-- The enclosure under the global local bound: `RelativeLocalAddBound` holds at every tree. -/
+theorem evalRound_enclosure_of_relativeLocalAddBound
+    (roundAdd : ℝ → ℝ → ℝ) (leafVal : α → ℝ) (u : ℝ)
+    (H : RelativeLocalAddBound roundAdd u) (hu : 0 ≤ u) :
+    ∀ t : SumTree α,
+      _root_.abs (evalRound roundAdd leafVal t - exactSum leafVal t) ≤
+        (growth u t.leafCount - 1) * sumAbs leafVal t :=
+  fun t => evalRound_enclosure_of_localAddBoundOn roundAdd leafVal u hu t
+    (localAddBoundOn_of_relativeLocalAddBound roundAdd leafVal u H t)
 
 /-! ## `IEEE32Exec`: evaluation + nondeterminism (expression tree + permutation) -/
 

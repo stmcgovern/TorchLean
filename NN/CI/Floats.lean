@@ -35,6 +35,7 @@ public import NN.Floats.IEEEExec.Encoding.MkBitsToReal
 public import NN.Floats.IEEEExec.Rounding.NatLemmas
 public import NN.Floats.IEEEExec.Notation
 public import NN.Floats.IEEEExec.Reductions
+public import NN.Floats.IEEEExec.Reductions.NormalRange
 public import NN.Floats.IEEEExec.Rounding.RoundDyadicToIEEE32Bounds
 public import NN.Floats.IEEEExec.Rounding.RoundQuotEvenBounds
 public import NN.Floats.IEEEExec.Rounding.RoundShiftRightEven
